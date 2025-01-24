@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
 def elbow_method():
-    X_train = []  # frequencies
-    y_train = []  # note names
+    X_train = []  
+    y_train = []  
 
     for note_name, frequencies in known_notes.items():
         for freq in frequencies:
@@ -24,11 +24,9 @@ def elbow_method():
     k_values = range(1, 20)
 
     for k in k_values:
-        # train
         knn = KNeighborsClassifier(n_neighbors=k)
         knn.fit(X_train_split, y_train_split)
 
-        # predict
         y_pred = knn.predict(X_val)
 
         error_rate = 1 - accuracy_score(y_val, y_pred)
@@ -44,7 +42,6 @@ def elbow_method():
 
     min_value = np.argmin(error_rates)
 
-    # find the last min
     indices = np.where(error_rates == min_value)[0]
     last_occurrence_index = indices[-1]
     best_k = k_values[last_occurrence_index]
@@ -56,10 +53,8 @@ def get_dominant_frequency(file_path):
 
     sample_rate = audio.frame_rate
 
-    # normalize the signal
     samples = samples / np.max(np.abs(samples))
 
-    # FFT
     n = len(samples)
     fft_values = fft(samples)
     frequencies = fftfreq(n, 1 / sample_rate)
@@ -67,10 +62,9 @@ def get_dominant_frequency(file_path):
     positive_freq = frequencies[:n // 2]
     positive_fft_values = np.abs(fft_values[:n // 2])
 
-    # dominant frequency (frequency with the highest magnitude)
     dominant_frequency = positive_freq[np.argmax(positive_fft_values)]
 
-    return dominant_frequency
+    return dominant_frequency, positive_freq, positive_fft_values
 
 known_notes_folder = "knn/train" 
 known_notes = {} 
@@ -80,14 +74,23 @@ for filename in os.listdir(known_notes_folder):
         note_name = filename.split("_")[0]
 
         file_path = os.path.join(known_notes_folder, filename)
-        dominant_frequency = get_dominant_frequency(file_path)
+        dominant_frequency, positive_freq, positive_fft_values = get_dominant_frequency(file_path)
 
         if note_name not in known_notes:
             known_notes[note_name] = []
         known_notes[note_name].append(dominant_frequency)
 
-X_train = []  # frequencies
-y_train = []  # note names
+        # Plot FFT for each training file
+        plt.figure(figsize=(10, 6))
+        plt.plot(positive_freq, positive_fft_values)
+        plt.title(f"FFT for {filename} (Dominant Frequency: {dominant_frequency:.2f} Hz)")
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Magnitude")
+        plt.grid()
+        plt.show()
+
+X_train = []  
+y_train = []  
 
 for note_name, frequencies in known_notes.items():
     for freq in frequencies:
@@ -97,7 +100,7 @@ for note_name, frequencies in known_notes.items():
 X_train = np.array(X_train).reshape(-1, 1) 
 y_train = np.array(y_train) 
 
-knn = KNeighborsClassifier(n_neighbors=3)   # k = 3 is optimal
+knn = KNeighborsClassifier(n_neighbors=3)   
 knn.fit(X_train, y_train)
 
 unknown_notes_folder = "knn/test"  
@@ -105,7 +108,7 @@ unknown_notes_folder = "knn/test"
 for filename in os.listdir(unknown_notes_folder):
     if filename.endswith(".m4a"):
         file_path = os.path.join(unknown_notes_folder, filename)
-        dominant_frequency = get_dominant_frequency(file_path)
+        dominant_frequency, _, _ = get_dominant_frequency(file_path)
 
         predicted_note = knn.predict([[dominant_frequency]])
 
@@ -116,3 +119,31 @@ for filename in os.listdir(unknown_notes_folder):
 
 elbow_method()
 
+# bar plot for training data frequencies
+plt.figure(figsize=(12, 6))
+for note_name, frequencies in known_notes.items():
+    plt.bar(note_name, np.mean(frequencies), label=note_name)
+plt.title("Training Data Frequencies")
+plt.xlabel("Note")
+plt.ylabel("Frequency (Hz)")
+plt.legend()
+plt.show()
+
+# bar plot for test data frequencies
+test_frequencies = []
+test_notes = []
+
+for filename in os.listdir(unknown_notes_folder):
+    if filename.endswith(".m4a"):
+        file_path = os.path.join(unknown_notes_folder, filename)
+        dominant_frequency, _, _ = get_dominant_frequency(file_path)
+        predicted_note = knn.predict([[dominant_frequency]])[0]
+        test_frequencies.append(dominant_frequency)
+        test_notes.append(predicted_note)
+
+plt.figure(figsize=(12, 6))
+plt.bar(test_notes, test_frequencies)
+plt.title("Test Data Frequencies")
+plt.xlabel("Predicted Note")
+plt.ylabel("Frequency (Hz)")
+plt.show()
